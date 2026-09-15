@@ -26,7 +26,7 @@ Read `package.json` and `package-lock.json` for dependencies; this snapshot desc
 - `public/`: static assets. `@/*` resolves from the repository root.
 - `docs/`: product and development guidance.
 
-Proposed route areas are `/login`, `/register`, `/customer`, `/worker`, and `/admin`. They are not present yet. Add folders incrementally rather than scaffolding all future features.
+WeGo has public UI at `/`, `/login`, and `/register`, plus `/design-system`. The login and customer registration screens share `app/(auth)/auth-form.tsx` for local validation and password visibility. The route group shares a server-rendered layout without adding a URL segment. Authentication is not connected. `/customer`, `/worker`, and `/admin` remain planned; add folders incrementally rather than scaffolding future features.
 
 Use Server Components by default. Add `"use client"` at the smallest interactive boundary for browser state, event handlers, or animation. Keep secrets and privileged operations on the server. Pass only serializable, necessary data to client components. Consult the installed Next.js guides in `node_modules/next/dist/docs/` before adopting version-sensitive APIs.
 

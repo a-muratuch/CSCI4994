@@ -1,6 +1,6 @@
 # Roadmap
 
-The starter/tooling setup and design-system foundation at `/design-system` are implemented. Reduced-motion preference emulation remains a manual verification item. Guidance does not count as implementation of the planned pages below. Work in small tasks within each stage; update status when its exit criteria are actually met.
+The starter/tooling setup, design-system foundation at `/design-system`, and WeGo public UI at `/`, `/login`, and `/register` are implemented. Login and customer registration validate locally and explicitly report that authentication is not connected. Reduced-motion preference emulation remains a manual verification item. Guidance does not count as implementation of the planned pages below. Work in small tasks within each stage; update status when its exit criteria are actually met.
 
 | Stage | Work | Exit criteria |
 | --- | --- | --- |

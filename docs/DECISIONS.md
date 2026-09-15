@@ -38,6 +38,13 @@ A lightweight architecture decision record (ADR) captures a choice and its reaso
 - **Reason:** Keep meaning consistent and controls readable without a new component library.
 - **Consequence:** Reuse these semantic utilities for future pages. The preview is static, with 44px controls and reduced-motion safeguards; it does not implement application behavior.
 
+## D006 — WeGo authentication screen prototypes
+
+- **Status:** Accepted; UI only.
+- **Decision:** Use the owner's WeGo name for the new login and registration screens. Share local form validation and password visibility controls; registration is customer-only with no role selector. Submission reports demo validation, never a signed-in session or created account.
+- **Reason:** Demonstrate accessible forms before backend integration without inventing authentication behavior.
+- **Consequence:** Values stay in component memory, with no requests or application storage. Registration checks name, email, a demo minimum of 8 password characters, and matching confirmation; login checks email and a nonblank password. The demo minimum is not a final backend password policy. Real authentication, server validation, and role enforcement remain Stage 6 work.
+
 ## Open decisions
 
 Finalize estimate revisions/cancellations, state transitions, scheduling constraints/time zone, schema and trusted admin provisioning before Stage 6. Select test tooling when real behavior needs coverage. Select a deployment provider during release planning. These are not permission to implement features ahead of the roadmap.
