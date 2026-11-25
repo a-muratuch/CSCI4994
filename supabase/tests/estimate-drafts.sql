@@ -1,0 +1,48 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+set local search_path = public, extensions;
+select plan(1);
+do $test$
+declare
+  admin_id uuid:=gen_random_uuid(); customer_id uuid:=gen_random_uuid(); other_id uuid:=gen_random_uuid();
+  request_id uuid; saved public.estimates%rowtype; version integer; checks integer:=0;
+  input jsonb:='{"lines":[{"label":"Labor","amountCents":48000},{"label":"Transportation","amountCents":17000}],"inclusions":["Labor"],"exclusions":["Packing"],"terms":"Acceptance does not confirm a moving date."}';
+begin
+  insert into auth.users(id,email,raw_user_meta_data) values(admin_id,admin_id::text||'@example.invalid','{}'),(customer_id,customer_id::text||'@example.invalid','{}'),(other_id,other_id::text||'@example.invalid','{}');
+  update public.profiles set role='admin' where id=admin_id;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',json_build_object('sub',customer_id,'role','authenticated')::text,true);
+  insert into public.move_requests(pickup,destination,requested_date,property_type,move_size,items,access_details) values('12 Example Lane','25 Example Court',(now() at time zone 'America/Chicago')::date+7,'Apartment','Studio','Boxes','Ground floor') returning id into request_id;
+  begin perform public.save_estimate_draft(request_id,null,0,input);raise exception 'Customer draft save allowed';exception when insufficient_privilege then checks:=checks+1;end;
+  perform set_config('request.jwt.claims',json_build_object('sub',admin_id,'role','authenticated')::text,true);
+  saved:=public.save_estimate_draft(request_id,null,0,input);
+  if saved.status<>'draft' or (select count(*) from public.estimate_items where estimate_id=saved.id)<>2 then raise exception 'Atomic draft creation failed';end if;checks:=checks+1;
+  begin perform public.save_estimate_draft(request_id,null,0,input);raise exception 'Duplicate creation allowed';exception when serialization_failure then checks:=checks+1;end;
+  version:=saved.revision;
+  saved:=public.save_estimate_draft(request_id,saved.id,version,jsonb_set(input,'{lines,0,amountCents}','50000'));
+  if saved.revision<=version or (select sum(amount_cents) from public.estimate_items where estimate_id=saved.id)<>67000 then raise exception 'Edit failed';end if;checks:=checks+1;
+  begin perform public.save_estimate_draft(request_id,saved.id,version,input);raise exception 'Stale edit allowed';exception when serialization_failure then checks:=checks+1;end;
+  begin perform public.publish_reviewed_estimate(saved.id,version);raise exception 'Stale publish allowed';exception when serialization_failure then checks:=checks+1;end;
+  begin perform public.save_estimate_draft(request_id,saved.id,saved.revision,jsonb_set(input,'{lines,0,amountCents}','-1'));raise exception 'Negative price allowed';exception when invalid_parameter_value then checks:=checks+1;end;
+  if (select sum(amount_cents) from public.estimate_items where estimate_id=saved.id)<>67000 then raise exception 'Invalid save changed lines';end if;checks:=checks+1;
+  version:=saved.revision;
+  insert into public.estimate_items(estimate_id,position,label,amount_cents) values(saved.id,3,'Added after review',100);
+  begin perform public.publish_reviewed_estimate(saved.id,version);raise exception 'Unreviewed pricing published';exception when serialization_failure then checks:=checks+1;end;
+  select revision into version from public.estimates where id=saved.id;
+  saved:=public.publish_reviewed_estimate(saved.id,version);
+  if saved.total_cents<>67100 or saved.status<>'awaiting' then raise exception 'Publication failed';end if;checks:=checks+1;
+  begin perform public.save_estimate_draft(request_id,saved.id,saved.revision,input);raise exception 'Published edit allowed';exception when serialization_failure then checks:=checks+1;end;
+  perform set_config('request.jwt.claims',json_build_object('sub',other_id,'role','authenticated')::text,true);
+  if exists(select 1 from public.estimates where id=saved.id) then raise exception 'Other customer can read estimate';end if;checks:=checks+1;
+  begin perform public.decide_estimate(saved.id,'accepted');raise exception 'Other customer decision allowed';exception when insufficient_privilege then checks:=checks+1;end;
+  perform set_config('request.jwt.claims',json_build_object('sub',customer_id,'role','authenticated')::text,true);
+  saved:=public.decide_estimate(saved.id,'accepted');
+  if saved.status<>'accepted' or saved.decided_at is null then raise exception 'Decision failed';end if;checks:=checks+1;
+  if exists(select 1 from public.jobs where estimate_id=saved.id) then raise exception 'Acceptance scheduled job';end if;checks:=checks+1;
+  if (select count(*) from public.estimate_events where estimate_id=saved.id)<>2 then raise exception 'Events not atomic';end if;checks:=checks+1;
+  perform set_config('estimate.drafts.tests',checks::text,true);
+end $test$;
+select current_setting('estimate.drafts.tests')::integer as assertions_passed;
+select pass('estimate-drafts assertions completed');
+select * from finish();
+rollback;
